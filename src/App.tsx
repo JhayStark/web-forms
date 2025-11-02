@@ -1,22 +1,16 @@
 import "./App.css";
-import Header from "./components/form/Header";
-import AdvancedSurveyForm from "./components/Test";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import FormExample from "./components/examples/FormExample";
+import FormPage from "./pages/FormPage";
 
 function App() {
   return (
-    <div className="min-h-screen p-4 bg-[#F0F4F9] ">
-      <div className="max-w-5xl mx-auto">
-        <Header
-          title="Form Header"
-          description="This is a description"
-          postedBy="John Doe"
-          createdAt="2023-01-01"
-          modifiedAt="2023-01-02"
-          isMultiStep={true}
-        />
-        <AdvancedSurveyForm />
-      </div>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<FormExample />} />
+        <Route path="/form/:id" element={<FormPage />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 

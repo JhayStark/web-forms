@@ -6,7 +6,6 @@ interface HeaderProps {
   postedBy?: string;
   createdAt?: string;
   modifiedAt?: string;
-  isMultiStep?: boolean;
 }
 
 const itemStyles = "flex items-center space-x-2 text-gray-500";
@@ -17,7 +16,6 @@ const Header = ({
   postedBy,
   createdAt,
   modifiedAt,
-  isMultiStep = false,
 }: HeaderProps) => {
   return (
     <div className="shadow-md rounded-t-lg border-t-8 bg-white p-6 border-primary space-y-4">
@@ -25,7 +23,7 @@ const Header = ({
         <h1 className="text-4xl font-bold text-gray-800">{title}</h1>
       </div>
       <p className="border-b pb-4">{description}</p>
-      <div className="flex-col flex md:flex-row md:items-center gap-3 md: gap-4 mt-2">
+      <div className="flex-col flex md:flex-row md:items-center gap-3 md:gap-4 mt-2">
         {postedBy && (
           <div className={itemStyles}>
             <User />
