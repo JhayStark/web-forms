@@ -1,7 +1,7 @@
 import { useCallback, useState, useRef } from "react";
 import { GoogleMap, Polygon, useJsApiLoader, Marker } from "@react-google-maps/api";
 import { Button } from "../ui/button";
-import { MapPin, Trash2, Undo } from "lucide-react";
+import { MapPin, Trash2, Undo, Navigation, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface Coordinate {
@@ -40,6 +40,9 @@ const PolygonMap = ({
 }: PolygonMapProps) => {
   const [points, setPoints] = useState<Coordinate[]>(coordinates);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<Coordinate | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
 
   const { isLoaded, loadError } = useJsApiLoader({
@@ -86,6 +89,65 @@ const PolygonMap = ({
     setIsDrawing(!isDrawing);
   };
 
+  const handleAddCurrentLocation = () => {
+    if (!editable) return;
+
+    setIsGettingLocation(true);
+    setLocationError(null);
+
+    if (!navigator.geolocation) {
+      setLocationError("Geolocation is not supported by your browser");
+      setIsGettingLocation(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const newPoint: Coordinate = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+
+        // Update current location marker
+        setCurrentLocation(newPoint);
+
+        // Add to points
+        const updatedPoints = [...points, newPoint];
+        setPoints(updatedPoints);
+        onChange?.(updatedPoints);
+
+        // Pan map to new location
+        if (mapRef.current) {
+          mapRef.current.panTo(newPoint);
+          mapRef.current.setZoom(Math.max(mapRef.current.getZoom() || 15, 15));
+        }
+
+        setIsGettingLocation(false);
+      },
+      (error) => {
+        let errorMessage = "Failed to get your location";
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = "Location permission denied. Please enable location access.";
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = "Location information unavailable.";
+            break;
+          case error.TIMEOUT:
+            errorMessage = "Location request timed out.";
+            break;
+        }
+        setLocationError(errorMessage);
+        setIsGettingLocation(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
+    );
+  };
+
   const handleMarkerDragEnd = (index: number, e: google.maps.MapMouseEvent) => {
     if (!editable || !e.latLng) return;
 
@@ -118,11 +180,11 @@ const PolygonMap = ({
 
     const bounds = new google.maps.LatLngBounds();
     coords.forEach((coord) => bounds.extend(coord));
-    const center = bounds.getCenter();
+    const mapCenter = bounds.getCenter();
 
     return {
-      lat: center.lat(),
-      lng: center.lng(),
+      lat: mapCenter.lat(),
+      lng: mapCenter.lng(),
     };
   };
 
@@ -171,6 +233,26 @@ const PolygonMap = ({
 
           <Button
             type="button"
+            variant="default"
+            size="sm"
+            onClick={handleAddCurrentLocation}
+            disabled={isGettingLocation}
+          >
+            {isGettingLocation ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                Getting Location...
+              </>
+            ) : (
+              <>
+                <Navigation className="h-4 w-4 mr-1" />
+                Add Current Location
+              </>
+            )}
+          </Button>
+
+          <Button
+            type="button"
             variant="outline"
             size="sm"
             onClick={handleRemoveLastPoint}
@@ -200,6 +282,14 @@ const PolygonMap = ({
           >
             Fit to Bounds
           </Button>
+        </div>
+      )}
+
+      {/* Location Error */}
+      {locationError && (
+        <div className="rounded-md border border-destructive bg-destructive/10 p-3">
+          <p className="text-destructive text-sm font-medium">Location Error</p>
+          <p className="text-destructive/80 text-xs mt-1">{locationError}</p>
         </div>
       )}
 
@@ -248,6 +338,22 @@ const PolygonMap = ({
             />
           ))}
 
+          {/* Render current location marker (pulsing blue dot) */}
+          {currentLocation && (
+            <Marker
+              position={currentLocation}
+              icon={{
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 8,
+                fillColor: "#4285F4",
+                fillOpacity: 1,
+                strokeColor: "#FFFFFF",
+                strokeWeight: 2,
+              }}
+              title="Your current location"
+            />
+          )}
+
           {/* Render polygon if at least 3 points */}
           {points.length >= 3 && <Polygon paths={points} options={polygonOptions} />}
         </GoogleMap>
@@ -294,12 +400,15 @@ const PolygonMap = ({
         <div className="rounded-md bg-blue-50 border border-blue-200 p-3">
           <p className="text-sm text-blue-900 font-medium">How to use:</p>
           <ol className="text-sm text-blue-800 mt-2 space-y-1 list-decimal list-inside">
-            <li>Click "Start Drawing" to enable drawing mode</li>
-            <li>Click on the map to add points</li>
+            <li>Click "Start Drawing" to enable drawing mode and click on the map, OR</li>
+            <li>Click "Add Current Location" to use your GPS position (walk to each corner)</li>
             <li>Add at least 3 points to form a polygon</li>
-            <li>Drag markers to adjust positions</li>
+            <li>Drag markers to adjust positions if needed</li>
             <li>Use "Undo Last" or "Clear All" to remove points</li>
           </ol>
+          <p className="text-xs text-blue-700 mt-2 italic">
+            💡 Tip: Walk around the perimeter and click "Add Current Location" at each corner for accurate field mapping
+          </p>
         </div>
       )}
     </div>
