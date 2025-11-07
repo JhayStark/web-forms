@@ -200,7 +200,7 @@ function transformRealQuestion(question: RealApiQuestion): ApiQuestion {
     "image": "file", // Image upload
     "video": "file", // Video upload
     "audio": "file", // Audio upload
-    "polygon": "location", // Farm polygon - treat as location
+    "polygon": "polygon", // Farm polygon with map picker
     "option-tree": "select", // Hierarchical select - flatten to select
     "sub-form": "text", // Sub-forms - placeholder for now
   };

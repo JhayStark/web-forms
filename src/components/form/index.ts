@@ -15,9 +15,14 @@ export { default as FileFormField } from "../form-fields/file";
 export { default as SignatureFormField } from "../form-fields/signature";
 export { default as LocationFormField } from "../form-fields/location";
 export { default as QRCodeFormField } from "../form-fields/qrcode";
+export { default as PolygonFormField } from "../form-fields/polygon";
+
+// Map components
+export { default as PolygonMap } from "../map/PolygonMap";
 
 // Types
 export type { SelectOption } from "../form-fields/select";
 export type { RadioOption } from "../form-fields/radio";
 export type { CheckboxOption } from "../form-fields/checkbox-group";
 export type { LocationData } from "../form-fields/location";
+export type { Coordinate } from "../map/PolygonMap";

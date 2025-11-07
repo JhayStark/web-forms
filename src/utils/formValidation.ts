@@ -64,6 +64,15 @@ export function buildFieldSchema(question: FormQuestion): z.ZodTypeAny {
       // QR code is a string (scanned data)
       schema = z.string();
       break;
+    case "polygon":
+      // Polygon is an array of coordinates
+      schema = z.array(
+        z.object({
+          lat: z.number(),
+          lng: z.number(),
+        })
+      );
+      break;
     default:
       schema = z.string();
   }
@@ -83,6 +92,8 @@ export function buildFieldSchema(question: FormQuestion): z.ZodTypeAny {
       });
     } else if (question.type === "multiselect" || question.type === "checkbox-group") {
       schema = (schema as z.ZodArray<z.ZodTypeAny>).min(1, "Please select at least one option");
+    } else if (question.type === "polygon") {
+      schema = (schema as z.ZodArray<z.ZodTypeAny>).min(3, "Please add at least 3 points to form a polygon");
     } else {
       // For string-based fields
       if (schema instanceof z.ZodString) {
