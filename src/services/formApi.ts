@@ -1,4 +1,4 @@
-import type { FormSubmissionData, FormConfig } from "@/types/form.types";
+import type { FormConfig } from "@/types/form.types";
 import type { ApiFormConfig } from "@/types/api.types";
 import { MockFormApiService } from "./mockFormApi";
 import { transformApiFormConfig } from "@/utils/apiAdapter";
@@ -6,16 +6,20 @@ import { isRealApiResponse, transformRealApiResponse } from "@/utils/realApiAdap
 import { formatFormResponse } from "@/utils/responseFormatter";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api";
-const USE_MOCK_API = import.meta.env.VITE_USE_MOCK_API === "true" || !import.meta.env.VITE_API_BASE_URL;
 
 export class FormApiService {
   /**
    * Fetch form configuration and questions from the API
    * Automatically detects and transforms both standard and real API formats
+   * @param formId - The ID of the form to fetch
+   * @param useMockApi - Whether to use mock API (defaults to environment variable)
    */
-  static async fetchFormConfig(formId: string): Promise<FormConfig> {
-    // Use mock API in development
-    if (USE_MOCK_API) {
+  static async fetchFormConfig(formId: string, useMockApi?: boolean): Promise<FormConfig> {
+    // Determine whether to use mock API
+    const shouldUseMock = useMockApi ?? (import.meta.env.VITE_USE_MOCK_API === "true" || !import.meta.env.VITE_API_BASE_URL);
+
+    // Use mock API in development or when explicitly requested
+    if (shouldUseMock) {
       const mockData = await MockFormApiService.fetchFormConfig(formId);
 
       // Check if it's the real API format (nested pages structure)
@@ -55,23 +59,44 @@ export class FormApiService {
   }
 
   /**
-   * Submit form responses to the API (legacy format)
+   * Submit form responses to the API
+   * @param formId - The ID of the form to submit
+   * @param responses - The form responses
+   * @param useMockApi - Whether to use mock API (defaults to environment variable)
+   * @param formConfig - Optional form config for proper formatting (if available)
    */
   static async submitForm(
     formId: string,
-    responses: Record<string, unknown>
+    responses: Record<string, unknown>,
+    useMockApi?: boolean,
+    formConfig?: FormConfig
   ): Promise<{ success: boolean; message?: string; data?: unknown }> {
-    // Use mock API in development
-    if (USE_MOCK_API) {
+    // Determine whether to use mock API
+    const shouldUseMock = useMockApi ?? (import.meta.env.VITE_USE_MOCK_API === "true" || !import.meta.env.VITE_API_BASE_URL);
+
+    // Use mock API in development or when explicitly requested
+    if (shouldUseMock) {
       return MockFormApiService.submitForm(formId, responses);
     }
 
     try {
-      const submissionData: FormSubmissionData = {
-        formId,
-        responses,
-        submittedAt: new Date().toISOString(),
-      };
+      // If formConfig is provided, use the formatted submission
+      let submissionData: any;
+
+      if (formConfig) {
+        submissionData = formatFormResponse({
+          formId,
+          formConfig,
+          formData: responses,
+        });
+      } else {
+        // Fallback to legacy format if no formConfig
+        submissionData = {
+          formId,
+          responses,
+          submittedAt: new Date().toISOString(),
+        };
+      }
 
       const response = await fetch(`${API_BASE_URL}/forms/${formId}/submit`, {
         method: "POST",
@@ -150,10 +175,14 @@ export class FormApiService {
 
   /**
    * Fetch multiple forms (for listing)
+   * @param useMockApi - Whether to use mock API (defaults to environment variable)
    */
-  static async fetchForms(): Promise<FormConfig[]> {
-    // Use mock API in development
-    if (USE_MOCK_API) {
+  static async fetchForms(useMockApi?: boolean): Promise<FormConfig[]> {
+    // Determine whether to use mock API
+    const shouldUseMock = useMockApi ?? (import.meta.env.VITE_USE_MOCK_API === "true" || !import.meta.env.VITE_API_BASE_URL);
+
+    // Use mock API in development or when explicitly requested
+    if (shouldUseMock) {
       const mockData = await MockFormApiService.fetchForms();
       return mockData.map((item) => {
         if (isRealApiResponse(item)) {

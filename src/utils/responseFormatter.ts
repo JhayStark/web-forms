@@ -238,22 +238,23 @@ function formatSelectResponse(
   value: unknown
 ): QuestionResponse {
   const selectedOption = question.options?.find(
-    (opt: any) => opt.value === value
+    (opt: any) => opt.value === value || opt.label === value
   );
+
+  const displayValue = selectedOption?.label || (value as string);
+  const keyValue = selectedOption?.value || (value as string);
 
   return {
     ...baseResponse,
-    value: value as string,
-    valueProps: selectedOption
-      ? {
-          isOther: false,
-          key: selectedOption.value,
-          keyword_label: question.name || "",
-          level: 0,
-          uuid: `${String(value).toLowerCase()}-${question.id}`,
-          value: selectedOption.label,
-        }
-      : undefined,
+    value: displayValue,
+    valueProps: {
+      isOther: false,
+      key: keyValue,
+      keyword_label: question.name || "",
+      level: 0,
+      uuid: `${String(displayValue).toLowerCase().replaceAll(/\s+/g, "-")}-${question.id}`,
+      value: displayValue,
+    },
   };
 }
 
@@ -266,28 +267,37 @@ function formatMultiSelectResponse(
   value: unknown
 ): QuestionResponse {
   const selectedValues = Array.isArray(value) ? value : [value];
+
   const valueProps = selectedValues
     .map((val) => {
-      const option = question.options?.find((opt: any) => opt.value === val);
-      return option
-        ? {
-            isOther: false,
-            key: option.value,
-            keyword_label: question.name || "",
-            level: 0,
-            uuid: `${String(val).toLowerCase()}-${question.id}`,
-            value: option.label,
-          }
-        : null;
+      const option = question.options?.find(
+        (opt: any) => opt.value === val || opt.label === val
+      );
+      const displayValue = option?.label || val;
+      const keyValue = option?.value || val;
+
+      return {
+        isOther: false,
+        key: keyValue,
+        keyword_label: question.name || "",
+        level: 0,
+        uuid: `${String(displayValue).toLowerCase().replaceAll(/\s+/g, "-")}-${question.id}`,
+        value: displayValue,
+      };
     })
     .filter(Boolean);
 
+  const displayValues = selectedValues.map((val) => {
+    const option = question.options?.find(
+      (opt: any) => opt.value === val || opt.label === val
+    );
+    return option?.label || val;
+  });
+
   return {
     ...baseResponse,
-    value: selectedValues.length > 0 ? selectedValues[0] : undefined,
-    values: selectedValues.map((val) =>
-      question.options?.find((opt: any) => opt.value === val)?.label || val
-    ),
+    value: valueProps.length > 0 ? valueProps[0].key : undefined,
+    values: displayValues,
     valueProps,
   };
 }
