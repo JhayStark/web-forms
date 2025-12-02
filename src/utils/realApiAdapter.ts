@@ -73,8 +73,20 @@ interface RealApiQuestion {
  * Transform your real API response to the internal format
  */
 export function transformRealApiResponse(response: RealApiResponse): FormConfig {
+  // Validate response structure
+  if (!response?.data?.active_data?.pages) {
+    console.error("Invalid real API response structure:", response);
+    throw new Error("Invalid API response: missing data.active_data.pages");
+  }
+
   // Transform pages with their questions
   const pages: FormPage[] = response.data.active_data.pages.map((page) => {
+    // Defensive check: ensure questions exists and is an array
+    if (!page.questions || !Array.isArray(page.questions)) {
+      console.error("Invalid page - questions is not an array:", page);
+      throw new Error(`Invalid page structure: questions must be an array, got ${typeof page.questions}`);
+    }
+
     // Sort questions within the page by index
     const sortedQuestions = [...page.questions].sort((a, b) => a.index - b.index);
 

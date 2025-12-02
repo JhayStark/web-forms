@@ -123,6 +123,12 @@ function transformQuestion(apiQuestion: ApiQuestion): FormQuestion {
  * Transform API form configuration to internal format
  */
 export function transformApiFormConfig(apiConfig: ApiFormConfig): FormConfig {
+  // Defensive check: ensure questions exists and is an array
+  if (!apiConfig.questions || !Array.isArray(apiConfig.questions)) {
+    console.error("Invalid API config - questions is not an array:", apiConfig);
+    throw new Error(`Invalid API configuration: questions must be an array, got ${typeof apiConfig.questions}`);
+  }
+
   // Sort questions by index
   const sortedQuestions = [...apiConfig.questions].sort((a, b) => a.index - b.index);
 
