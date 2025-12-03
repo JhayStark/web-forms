@@ -23,10 +23,7 @@ export class FormApiService {
     useMockApi?: boolean
   ): Promise<FormConfig> {
     // Determine whether to use mock API
-    const shouldUseMock =
-      useMockApi ??
-      (import.meta.env.VITE_USE_MOCK_API === "true" ||
-        !import.meta.env.VITE_API_BASE_URL);
+    const shouldUseMock = useMockApi;
 
     // Use mock API in development or when explicitly requested
     if (shouldUseMock) {
@@ -101,10 +98,7 @@ export class FormApiService {
     formConfig?: FormConfig
   ): Promise<{ success: boolean; message?: string; data?: unknown }> {
     // Determine whether to use mock API
-    const shouldUseMock =
-      useMockApi ??
-      (import.meta.env.VITE_USE_MOCK_API === "true" ||
-        !import.meta.env.VITE_API_BASE_URL);
+    const shouldUseMock = useMockApi;
 
     // Use mock API in development or when explicitly requested
     if (shouldUseMock) {
@@ -213,10 +207,7 @@ export class FormApiService {
    */
   static async fetchForms(useMockApi?: boolean): Promise<FormConfig[]> {
     // Determine whether to use mock API
-    const shouldUseMock =
-      useMockApi ??
-      (import.meta.env.VITE_USE_MOCK_API === "true" ||
-        !import.meta.env.VITE_API_BASE_URL);
+    const shouldUseMock = useMockApi;
 
     // Use mock API in development or when explicitly requested
     if (shouldUseMock) {
