@@ -17,7 +17,8 @@ export type FieldType =
   | "file"
   | "signature"
   | "location"
-  | "qrcode";
+  | "qrcode"
+  | "polygon";
 
 export interface SelectOption {
   value: string | number;

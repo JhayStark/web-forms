@@ -8,11 +8,9 @@ import {
   FormLabel,
   FormMessage,
 } from "../ui/form";
+import { CheckCircle2, X, Camera } from "lucide-react";
+import { Html5QrcodeScanner } from "html5-qrcode";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
-import { Camera, X, CheckCircle2, QrCode } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { Html5Qrcode } from "html5-qrcode";
 
 interface QRCodeFormFieldProps<
   TFieldValues extends FieldValues = FieldValues,
@@ -33,179 +31,173 @@ const QRCodeFormField = <
   control,
   name,
   label,
-  placeholder = "Scan QR code or enter manually",
   description,
   disabled = false,
 }: QRCodeFormFieldProps<TFieldValues, TName>) => {
   const [isScanning, setIsScanning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const onChangeRef = useRef<((value: string) => void) | null>(null);
   const scannerElementId = `qr-reader-${String(name)}`;
 
-  const stopScanning = async () => {
-    if (scannerRef.current && isScanning) {
-      try {
-        await scannerRef.current.stop();
-        scannerRef.current.clear();
-      } catch (err) {
-        console.error("Error stopping scanner:", err);
-      }
-      scannerRef.current = null;
-      setIsScanning(false);
-    }
-  };
+  // Initialize scanner when isScanning becomes true
+  useEffect(() => {
+    if (!isScanning) return;
 
-  const startScanning = async (onChange: (value: unknown) => void) => {
-    setError(null);
+    const config = {
+      fps: 10,
+      qrbox: { width: 250, height: 250 },
+      aspectRatio: 1.0,
+      disableFlip: false,
+    };
 
-    try {
-      // Initialize scanner
-      if (!scannerRef.current) {
-        scannerRef.current = new Html5Qrcode(scannerElementId);
+    // Delay initialization to ensure DOM is ready
+    const timeoutId = setTimeout(() => {
+      const element = document.getElementById(scannerElementId);
+      if (!element) {
+        console.error("Scanner element not found:", scannerElementId);
+        setIsScanning(false);
+        return;
       }
 
-      // Start scanning
-      await scannerRef.current.start(
-        { facingMode: "environment" }, // Use back camera
-        {
-          fps: 10, // Frames per second
-          qrbox: { width: 250, height: 250 }, // Scanning box size
-        },
+      scannerRef.current = new Html5QrcodeScanner(
+        scannerElementId,
+        config,
+        false // verbose
+      );
+
+      scannerRef.current.render(
+        // Success callback
         (decodedText) => {
-          // Success callback
-          onChange(decodedText);
-          stopScanning();
+          console.log("QR Code scanned:", decodedText);
+
+          // Clean up scanner
+          if (scannerRef.current) {
+            scannerRef.current.clear().catch((err) => {
+              console.error("Failed to clear scanner:", err);
+            });
+            scannerRef.current = null;
+          }
+
+          setIsScanning(false);
+
+          // Update form field using ref
+          if (onChangeRef.current) {
+            onChangeRef.current(decodedText);
+          }
         },
+        // Error callback
         (errorMessage) => {
-          // Error callback (called very frequently, so we don't show these)
           console.debug("QR scan error:", errorMessage);
         }
       );
+    }, 100);
 
-      setIsScanning(true);
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : "Failed to start camera";
-      setError(errorMsg);
-      setIsScanning(false);
-    }
+    return () => {
+      clearTimeout(timeoutId);
+      if (scannerRef.current) {
+        scannerRef.current.clear().catch((err) => {
+          console.error("Failed to clear scanner:", err);
+        });
+        scannerRef.current = null;
+      }
+    };
+  }, [isScanning, scannerElementId]);
+
+  const startScanning = () => {
+    setIsScanning(true);
   };
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      stopScanning();
-    };
-  }, []);
+  const handleCancel = () => {
+    if (scannerRef.current) {
+      scannerRef.current.clear().catch((err) => {
+        console.error("Failed to clear scanner:", err);
+      });
+      scannerRef.current = null;
+    }
+    setIsScanning(false);
+  };
 
   return (
     <FormField
       control={control}
       name={name}
-      render={({ field }) => (
-        <FormItem>
-          {label && <FormLabel>{label}</FormLabel>}
-          <FormControl>
-            <div className="space-y-3">
-              {/* Show input only when not scanning */}
-              {!isScanning && (
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Input
-                      {...field}
-                      value={(field.value as string) || ""}
-                      placeholder={placeholder}
-                      disabled={disabled}
-                      className={cn(field.value && "pr-10")}
-                    />
-                    {field.value && (
-                      <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-600" />
-                    )}
-                  </div>
+      render={({ field }) => {
+        // Store the onChange function in ref so scanner callback can access it
+        onChangeRef.current = field.onChange;
+
+        return (
+          <FormItem>
+            {label && <FormLabel>{label}</FormLabel>}
+            <FormControl>
+              <div className="space-y-3">
+                {/* Show scan button when not scanning and no value */}
+                {!isScanning && !field.value && (
                   <Button
                     type="button"
                     variant="outline"
-                    size="icon"
+                    className="w-full"
                     disabled={disabled}
-                    onClick={() => startScanning(field.onChange)}
-                    title="Scan QR Code"
+                    onClick={startScanning}
                   >
-                    <Camera className="h-4 w-4" />
+                    <Camera className="h-4 w-4 mr-2" />
+                    Scan QR Code
                   </Button>
-                </div>
-              )}
+                )}
 
-              {/* QR Scanner */}
-              {isScanning && (
-                <div className="space-y-3">
-                  <div
-                    className={cn(
-                      "border-input rounded-md border overflow-hidden",
-                      "bg-black"
-                    )}
-                  >
-                    <div id={scannerElementId} className="w-full" />
-                  </div>
-
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <QrCode className="h-4 w-4" />
-                      <span>Position QR code within the frame</span>
+                {/* Scanner Container */}
+                {isScanning && (
+                  <div className="space-y-3">
+                    <div
+                      id={scannerElementId}
+                      className="rounded-md border overflow-hidden"
+                    />
+                    <div className="flex justify-center">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCancel}
+                      >
+                        <X className="h-4 w-4 mr-1" />
+                        Cancel
+                      </Button>
                     </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={stopScanning}
-                    >
-                      <X className="h-4 w-4 mr-1" />
-                      Cancel
-                    </Button>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Error Message */}
-              {error && (
-                <div className="rounded-md border border-destructive bg-destructive/10 p-3">
-                  <p className="text-destructive text-sm">{error}</p>
-                  <p className="text-destructive/80 text-xs mt-1">
-                    Make sure you've granted camera permissions in your browser.
-                  </p>
-                </div>
-              )}
-
-              {/* Success Message */}
-              {field.value && !isScanning && (
-                <div className="rounded-md border border-green-600 bg-green-50 p-3">
-                  <div className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0 mt-0.5" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-green-900 text-sm font-medium">
-                        QR Code Scanned Successfully
-                      </p>
-                      <p className="text-green-800 text-xs mt-1 break-all">
-                        {field.value as string}
-                      </p>
+                {/* Success Message */}
+                {field.value && !isScanning && (
+                  <div className="rounded-md border border-green-600 bg-green-50 p-3">
+                    <div className="flex items-start gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-green-900 text-sm font-medium">
+                          QR Code Scanned Successfully
+                        </p>
+                        <p className="text-green-800 text-xs mt-1 break-all">
+                          {field.value as string}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => field.onChange("")}
+                        disabled={disabled}
+                        title="Clear and scan again"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
                     </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => field.onChange("")}
-                      disabled={disabled}
-                      title="Clear"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
                   </div>
-                </div>
-              )}
-            </div>
-          </FormControl>
-          {description && <FormDescription>{description}</FormDescription>}
-          <FormMessage />
-        </FormItem>
-      )}
+                )}
+              </div>
+            </FormControl>
+            {description && <FormDescription>{description}</FormDescription>}
+            <FormMessage />
+          </FormItem>
+        );
+      }}
     />
   );
 };

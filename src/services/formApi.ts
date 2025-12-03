@@ -1,21 +1,39 @@
-import type { FormSubmissionData, FormConfig } from "@/types/form.types";
+import type { FormConfig } from "@/types/form.types";
 import type { ApiFormConfig } from "@/types/api.types";
 import { MockFormApiService } from "./mockFormApi";
 import { transformApiFormConfig } from "@/utils/apiAdapter";
-import { isRealApiResponse, transformRealApiResponse } from "@/utils/realApiAdapter";
+import {
+  isRealApiResponse,
+  transformRealApiResponse,
+} from "@/utils/realApiAdapter";
+import { formatFormResponse } from "@/utils/responseFormatter";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api";
-const USE_MOCK_API = import.meta.env.VITE_USE_MOCK_API === "true" || !import.meta.env.VITE_API_BASE_URL;
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api";
 
 export class FormApiService {
   /**
    * Fetch form configuration and questions from the API
    * Automatically detects and transforms both standard and real API formats
+   * @param formId - The ID of the form to fetch
+   * @param useMockApi - Whether to use mock API (defaults to environment variable)
    */
-  static async fetchFormConfig(formId: string): Promise<FormConfig> {
-    // Use mock API in development
-    if (USE_MOCK_API) {
+  static async fetchFormConfig(
+    formId: string,
+    useMockApi?: boolean
+  ): Promise<FormConfig> {
+    // Determine whether to use mock API
+    const shouldUseMock = useMockApi;
+
+    // Use mock API in development or when explicitly requested
+    if (shouldUseMock) {
       const mockData = await MockFormApiService.fetchFormConfig(formId);
+
+      // Check if it's the real API format (nested pages structure)
+      if (isRealApiResponse(mockData)) {
+        return transformRealApiResponse(mockData);
+      }
+
       return transformApiFormConfig(mockData);
     }
 
@@ -23,14 +41,39 @@ export class FormApiService {
       const response = await fetch(`${API_BASE_URL}/forms/${formId}`);
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch form: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error(`API error response (${response.status}):`, errorText);
+        throw new Error(
+          `Failed to fetch form: ${response.status} ${response.statusText}`
+        );
       }
 
       const data = await response.json();
 
+      // Log the response structure for debugging
+      console.log("API response structure:", {
+        hasStatusCode: "statusCode" in data,
+        hasData: "data" in data,
+        hasActiveData: data?.data?.active_data !== undefined,
+        hasPages: data?.data?.active_data?.pages !== undefined,
+        hasQuestions: "questions" in data,
+        isQuestionsArray: Array.isArray(data.questions),
+        topLevelKeys: Object.keys(data),
+      });
+
       // Check if it's the real API format (nested pages structure)
       if (isRealApiResponse(data)) {
         return transformRealApiResponse(data);
+      }
+
+      // Validate that we have questions array before transforming
+      if (!data.questions || !Array.isArray(data.questions)) {
+        console.error("Invalid form data structure:", data);
+        throw new Error(
+          `Invalid form data: expected 'questions' array or 'data.active_data.pages' structure. Got: ${JSON.stringify(
+            Object.keys(data)
+          )}`
+        );
       }
 
       // Otherwise use the standard adapter
@@ -43,22 +86,43 @@ export class FormApiService {
 
   /**
    * Submit form responses to the API
+   * @param formId - The ID of the form to submit
+   * @param responses - The form responses
+   * @param useMockApi - Whether to use mock API (defaults to environment variable)
+   * @param formConfig - Optional form config for proper formatting (if available)
    */
   static async submitForm(
     formId: string,
-    responses: Record<string, unknown>
+    responses: Record<string, unknown>,
+    useMockApi?: boolean,
+    formConfig?: FormConfig
   ): Promise<{ success: boolean; message?: string; data?: unknown }> {
-    // Use mock API in development
-    if (USE_MOCK_API) {
+    // Determine whether to use mock API
+    const shouldUseMock = useMockApi;
+
+    // Use mock API in development or when explicitly requested
+    if (shouldUseMock) {
       return MockFormApiService.submitForm(formId, responses);
     }
 
     try {
-      const submissionData: FormSubmissionData = {
-        formId,
-        responses,
-        submittedAt: new Date().toISOString(),
-      };
+      // If formConfig is provided, use the formatted submission
+      let submissionData: unknown;
+
+      if (formConfig) {
+        submissionData = formatFormResponse({
+          formId,
+          formConfig,
+          formData: responses,
+        });
+      } else {
+        // Fallback to legacy format if no formConfig
+        submissionData = {
+          formId,
+          responses,
+          submittedAt: new Date().toISOString(),
+        };
+      }
 
       const response = await fetch(`${API_BASE_URL}/forms/${formId}/submit`, {
         method: "POST",
@@ -78,19 +142,82 @@ export class FormApiService {
       console.error("Error submitting form:", error);
       return {
         success: false,
-        message: error instanceof Error ? error.message : "Failed to submit form",
+        message:
+          error instanceof Error ? error.message : "Failed to submit form",
+      };
+    }
+  }
+
+  /**
+   * Submit form responses using the proper API format
+   * This formats the response to match the expected API structure
+   */
+  static async submitFormattedResponse(
+    formId: string,
+    formConfig: FormConfig,
+    responses: Record<string, unknown>,
+    options?: {
+      timeSpent?: number;
+      version?: string;
+      labels?: {
+        imageLabel?: string;
+        label1?: string;
+        label2?: string;
+      };
+    }
+  ): Promise<{ success: boolean; message?: string; data?: unknown }> {
+    try {
+      // Format the response to match API structure
+      const formattedResponse = formatFormResponse({
+        formId,
+        formConfig,
+        formData: responses,
+        timeSpent: options?.timeSpent,
+        version: options?.version,
+        labels: options?.labels,
+      });
+
+      const response = await fetch(`${API_BASE_URL}/forms/${formId}/submit`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formattedResponse),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to submit form: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return { success: true, data };
+    } catch (error) {
+      console.error("Error submitting form:", error);
+      return {
+        success: false,
+        message:
+          error instanceof Error ? error.message : "Failed to submit form",
       };
     }
   }
 
   /**
    * Fetch multiple forms (for listing)
+   * @param useMockApi - Whether to use mock API (defaults to environment variable)
    */
-  static async fetchForms(): Promise<FormConfig[]> {
-    // Use mock API in development
-    if (USE_MOCK_API) {
+  static async fetchForms(useMockApi?: boolean): Promise<FormConfig[]> {
+    // Determine whether to use mock API
+    const shouldUseMock = useMockApi;
+
+    // Use mock API in development or when explicitly requested
+    if (shouldUseMock) {
       const mockData = await MockFormApiService.fetchForms();
-      return mockData.map(transformApiFormConfig);
+      return mockData.map((item) => {
+        if (isRealApiResponse(item)) {
+          return transformRealApiResponse(item);
+        }
+        return transformApiFormConfig(item as ApiFormConfig);
+      });
     }
 
     try {

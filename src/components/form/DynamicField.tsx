@@ -12,6 +12,7 @@ import LocationFormField from "../form-fields/location";
 import DateFormField from "../form-fields/date";
 import FileFormField from "../form-fields/file";
 import QRCodeFormField from "../form-fields/qrcode";
+import PolygonFormField from "../form-fields/polygon";
 
 interface DynamicFieldProps<TFieldValues extends FieldValues = FieldValues> {
   question: FormQuestion;
@@ -108,6 +109,9 @@ const DynamicField = <TFieldValues extends FieldValues = FieldValues>({
 
     case "qrcode":
       return <QRCodeFormField {...commonProps} />;
+
+    case "polygon":
+      return <PolygonFormField {...commonProps} />;
 
     default:
       return (

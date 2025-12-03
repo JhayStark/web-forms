@@ -12,9 +12,11 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 
 interface FormRendererProps {
   formId: string;
+  useMockApi?: boolean;
   onSubmit?: (data: Record<string, unknown>) => void | Promise<void>;
   onSuccess?: (response: unknown) => void;
   onError?: (error: Error) => void;
+  onFormLoad?: (config: FormConfig) => void;
 }
 
 /**
@@ -22,9 +24,11 @@ interface FormRendererProps {
  */
 const FormRenderer = ({
   formId,
+  useMockApi = false,
   onSubmit,
   onSuccess,
   onError,
+  onFormLoad,
 }: FormRendererProps) => {
   const [formConfig, setFormConfig] = useState<FormConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -39,8 +43,13 @@ const FormRenderer = ({
         setLoading(true);
         setError(null);
         // FormApiService now returns FormConfig directly (already transformed)
-        const config = await FormApiService.fetchFormConfig(formId);
+        const config = await FormApiService.fetchFormConfig(formId, useMockApi);
         setFormConfig(config);
+
+        // Notify parent component that form is loaded
+        if (onFormLoad) {
+          onFormLoad(config);
+        }
       } catch (err) {
         const errorMessage =
           err instanceof Error ? err.message : "Failed to load form";
@@ -54,7 +63,8 @@ const FormRenderer = ({
     };
 
     fetchForm();
-  }, [formId, onError]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formId, useMockApi]);
 
   // Build schema and get default values when form config is loaded
   const schema = formConfig ? buildFormSchema(formConfig.questions) : null;
@@ -79,8 +89,13 @@ const FormRenderer = ({
       if (onSubmit) {
         await onSubmit(data);
       } else {
-        // Otherwise, submit to the API
-        const result = await FormApiService.submitForm(formId, data);
+        // Otherwise, submit to the API with proper formatting
+        const result = await FormApiService.submitForm(
+          formId,
+          data,
+          useMockApi,
+          formConfig || undefined
+        );
 
         if (result.success) {
           if (onSuccess) {
